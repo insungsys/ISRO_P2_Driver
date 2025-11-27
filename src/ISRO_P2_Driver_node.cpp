@@ -30,7 +30,7 @@ public:
         
         this->declare_parameter("frame_id", "gps_link");
         this->declare_parameter("imu_frame_id", "imu_link");
-        this->declare_parameter("publish_rate", 20.0);
+        this->declare_parameter("publish_rate", 50.0);
         this->declare_parameter("publish_raw_imu", true);
         this->declare_parameter("use_enu", true); // True: ENU(ROS표준), False: NED(장비표준)
 
@@ -191,19 +191,22 @@ private:
         // 1. PVA (Position, Velocity, Attitude) 처리
         PVA_MESSAGE_T pva;
         if (P2_GetPVA(device_, &pva) == 0) {
-            // [Time Sync] GPS 시간이 유효하면 그것을 사용, 아니면 PC 시간 사용
-            rclcpp::Time msg_time = now;
-            if (pva.header_gps_week > 0) {
-                msg_time = calculateGPSTime(pva.header_gps_week, pva.header_gps_ms);
-            }
+            // [중복 방지] 새로운 데이터가 들어왔을 때만 발행
+            if (pva.header_gps_ms != last_gps_ms_) {
+                last_gps_ms_ = pva.header_gps_ms; // 업데이트
 
-            // 데이터 발행
-            publishPVAData(pva, msg_time);
-            
-            // [Debug] 전체 상태 정보 문자열 발행
-            auto debug_msg = std_msgs::msg::String();
-            debug_msg.data = generateFullDebugString(pva);
-            debug_pub_->publish(debug_msg);
+                rclcpp::Time msg_time = now;
+                // GPS Time Sync
+                if (pva.header_gps_week > 0) {
+                    msg_time = calculateGPSTime(pva.header_gps_week, pva.header_gps_ms);
+                }
+                publishPVAData(pva, msg_time);
+                
+                // Debug
+                auto debug_msg = std_msgs::msg::String();
+                debug_msg.data = generateFullDebugString(pva);
+                debug_pub_->publish(debug_msg);
+            }
         }
 
         // 2. NMEA (GGA) 처리 -> NTRIP 전송용
@@ -525,6 +528,7 @@ private:
     uint32_t log_counter_ = 0;
     uint32_t imu_log_counter_ = 0;
     uint32_t no_pva_counter_ = 0;
+	uint32_t last_gps_ms_ = 0;
 };
 
 int main(int argc, char** argv) {

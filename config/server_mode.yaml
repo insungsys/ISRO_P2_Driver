@@ -1,5 +1,16 @@
 ISRO_P2_Driver_node:
   ros__parameters:
+    # --- Connection Mode ---
     mode: "tcp_server"
+    
+    # TCP Server Config (장비 접속 대기)
     tcp:
-      port: 3000           # PC에서 열어둘 Port
+      port: 3000              # PC에서 열어둘 포트 번호
+    
+    # --- Common Configuration ---
+    frame_id: "gps_link"
+    imu_frame_id: "imu_link"
+    
+    publish_rate: 50.0
+    publish_raw_imu: true
+    use_enu: true

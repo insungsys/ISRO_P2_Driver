@@ -1,10 +1,17 @@
 ISRO_P2_Driver_node:
   ros__parameters:
+    # --- Connection Mode ---
     mode: "tcp_client"
+    
+    # TCP Client Config (장비로 접속)
     tcp:
-      ip: "192.168.1.100"  # 장비 IP
-      port: 3000           # 장비 Port
-    # 기타 설정
+      ip: "192.168.1.100"     # 장비 IP 주소 (환경에 맞게 수정하세요)
+      port: 3000              # 장비 포트 번호
+    
+    # --- Common Configuration ---
     frame_id: "gps_link"
-    publish_rate: 20.0
-    use_enu: true      
+    imu_frame_id: "imu_link"
+    
+    publish_rate: 50.0
+    publish_raw_imu: true
+    use_enu: true
