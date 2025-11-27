@@ -120,6 +120,9 @@ struct ISRO_P2_T {
 
     char latest_nmea[1024];
     bool nmea_valid;
+	
+	STATUS_MESSAGE_T latest_status;
+    bool status_valid;
 };
 
 // --- Utilities ---
@@ -238,6 +241,19 @@ static void ProcessIMUMessage(struct ISRO_P2_T* device, const uint8_t* data, uin
     pthread_mutex_unlock(&device->data_mutex);
 }
 
+// STATUS 메시지 처리 함수
+static void ProcessStatusMessage(struct ISRO_P2_T* device, const uint8_t* data, uint32_t len) {
+    if (len < sizeof(STATUS_MESSAGE_T)) return;
+    
+    STATUS_MESSAGE_T status;
+    memcpy(&status, data, sizeof(STATUS_MESSAGE_T));
+    
+    pthread_mutex_lock(&device->data_mutex);
+    memcpy(&device->latest_status, &status, sizeof(STATUS_MESSAGE_T));
+    device->status_valid = true;
+    pthread_mutex_unlock(&device->data_mutex);
+}
+
 static void ProcessAutomotiveMessage(struct ISRO_P2_T* device, const uint8_t* payload, uint32_t len) {
     if (len < sizeof(AUTOMOTIVE_HEADER_T)) return;
     AUTOMOTIVE_HEADER_T* header = (AUTOMOTIVE_HEADER_T*)payload;
@@ -254,7 +270,7 @@ static void ProcessAutomotiveMessage(struct ISRO_P2_T* device, const uint8_t* pa
             ProcessIMUMessage(device, msg_data, header->message_data_size);
             break;
         case MSG_ID_STATUS:
-            // 추후 구현: 장비 상태(전압, 온도 등) 처리
+            ProcessStatusMessage(device, msg_data, header->message_data_size);
             // printf("[INFO] STATUS Message Received (Size: %d)\n", header->message_data_size);
             break;
         case MSG_ID_VERSION:
@@ -675,4 +691,59 @@ void P2_SetIMUCallback(ISRO_P2_T* device, IMU_Callback callback, void* user_data
     device->imu_callback = callback;
     device->imu_user_data = user_data;
     pthread_mutex_unlock(&device->data_mutex);
+}
+
+//  Status 조회 API 구현
+int P2_GetStatus(ISRO_P2_T* device, STATUS_MESSAGE_T* status) {
+    if (!device || !status) return -1;
+    pthread_mutex_lock(&device->data_mutex);
+    if (!device->status_valid) { pthread_mutex_unlock(&device->data_mutex); return -1; }
+    memcpy(status, &device->latest_status, sizeof(STATUS_MESSAGE_T));
+    pthread_mutex_unlock(&device->data_mutex);
+    return 0;
+}
+
+//  Reset 명령 전송 API 구현 (ID 2410)
+int P2_SendReset(ISRO_P2_T* device) {
+    if (!device) return -1;
+    int fd = -1;
+    if (device->config.type == CONN_TYPE_SERIAL) fd = device->main_fd;
+    else if (device->config.type == CONN_TYPE_TCP_CLIENT) fd = device->main_fd;
+    else return -1;
+    if (fd < 0) return -1;
+
+    // 전체 패킷 크기: PIMTP Header(12) + Auto Header(16) + Reset Body(12) + CRC(4) = 44 bytes
+    uint8_t packet[44]; 
+    memset(packet, 0, sizeof(packet));
+
+    // 1. PIMTP Header
+    PIMTP_HEADER_T* pim_hdr = (PIMTP_HEADER_T*)packet;
+    pim_hdr->sync[0] = 0xAC; pim_hdr->sync[1] = 0x55; 
+    pim_hdr->sync[2] = 0x96; pim_hdr->sync[3] = 0x83;
+    pim_hdr->payload_type = PIMTP_PAYLOAD_AUTOMOTIVE; // Type 1
+    pim_hdr->payload_length = 16 + 12; // AutoHeader + ResetBody
+
+    // 2. Automotive Header
+    AUTOMOTIVE_HEADER_T* auto_hdr = (AUTOMOTIVE_HEADER_T*)(packet + 12);
+    auto_hdr->message_id = 2410; // MSG_ID_RESET
+    auto_hdr->message_data_size = 12; // Reset Body Size
+    auto_hdr->time_status = 0; 
+    auto_hdr->gps_week = 0;
+    auto_hdr->gps_millisecond = 0;
+    auto_hdr->reserved = 0;
+
+    // 3. Reset Body (Table 66, 67)
+    // Type(4) + Param1(4) + Param2(4)
+    uint32_t* body = (uint32_t*)(packet + 12 + 16);
+    body[0] = 0; // 0 = NORMAL RESET [cite: 859]
+    body[1] = 0; // Parameter 1
+    body[2] = 0; // Parameter 2
+
+    // 4. CRC Calculation
+    uint32_t crc = CalculateNovAtelCRC32(packet, 40); // Header + Payload
+    memcpy(packet + 40, &crc, 4);
+
+    // 5. Send
+    write(fd, packet, sizeof(packet));
+    return 0;
 }

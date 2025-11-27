@@ -12,6 +12,7 @@ find_package(sensor_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(std_srvs REQUIRED)
 
 # C Driver Library
 add_library(ISRO_P2_Driver_lib SHARED
@@ -40,6 +41,7 @@ ament_target_dependencies(ISRO_P2_Driver_node
   geometry_msgs
   tf2
   tf2_geometry_msgs
+  std_srvs
 )
 
 # Install Targets

@@ -7,6 +7,7 @@
 #include "std_msgs/msg/byte_multi_array.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
+#include "std_srvs/srv/trigger.hpp" // 리셋 서비스용
 
 #include <sstream>
 #include <string>
@@ -80,6 +81,8 @@ public:
         fix_pub_ = this->create_publisher<sensor_msgs::msg::NavSatFix>("/fix", 10);
         vel_pub_ = this->create_publisher<geometry_msgs::msg::TwistWithCovarianceStamped>("/vel", 10);
         imu_pub_ = this->create_publisher<sensor_msgs::msg::Imu>("/imu/data", 10);
+		// 하드웨어 상태 퍼블리셔 (STATUS ID 2393)
+        status_pub_ = this->create_publisher<std_msgs::msg::String>("/pva/hardware_status", 10);
         
         // [Debug] 상세 상태 모니터링 (v4 기능 완벽 이식)
         debug_pub_ = this->create_publisher<std_msgs::msg::String>("/pva/status_debug", 10);
@@ -104,6 +107,12 @@ public:
                     P2_SendRTCM(device_, msg->data.data(), msg->data.size());
                 }
             });
+			
+		// 원격 리셋 서비스 서버 생성
+        reset_service_ = this->create_service<std_srvs::srv::Trigger>(
+            "/isro_p2/reset",
+            std::bind(&ISRO_P2_DriverNode::reset_service_callback, this, std::placeholders::_1, std::placeholders::_2)
+        );	
 
         // ---------------------------------------------------------
         // 5. 타이머 설정
@@ -121,7 +130,7 @@ public:
             RCLCPP_INFO(this->get_logger(), "Driver closed");
         }
     }
-	// [추가됨] C언어 드라이버에서 호출할 정적 래퍼 함수
+	//  C언어 드라이버에서 호출할 정적 래퍼 함수
     static void c_imu_callback_wrapper(const IMU_MESSAGE_T* imu, void* user_data) {
         ISRO_P2_DriverNode* node = (ISRO_P2_DriverNode*)user_data;
         if (node) {
@@ -129,12 +138,33 @@ public:
         }
     }
 
-    // [추가됨] 실제 IMU 데이터 처리 멤버 함수
+    //  실제 IMU 데이터 처리 멤버 함수
     void imu_data_callback(const IMU_MESSAGE_T* imu) {
         // 데이터 도착 즉시 현재 시간으로 발행 (또는 imu->gps_second 활용 가능)
         auto now = this->get_clock()->now();
         publishIMUData(*imu, now);
-    }	
+    }
+	
+	//  리셋 서비스 콜백 함수
+    void reset_service_callback(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                                std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        (void)request; // 사용 안 함
+        if (device_) {
+            if (P2_SendReset(device_) == 0) {
+                response->success = true;
+                response->message = "Reset command sent successfully.";
+                RCLCPP_WARN(this->get_logger(), "Reset command sent to device!");
+            } else {
+                response->success = false;
+                response->message = "Failed to send reset command (Connection issue?).";
+                RCLCPP_ERROR(this->get_logger(), "Failed to send reset command.");
+            }
+        } else {
+            response->success = false;
+            response->message = "Driver not initialized.";
+        }
+    }
 	
 
 private:
@@ -192,6 +222,24 @@ private:
         //        publishIMUData(imu, now); 
         //    }
         //}
+		
+		//  하드웨어 상태(STATUS) 처리
+        STATUS_MESSAGE_T status;
+        if (P2_GetStatus(device_, &status) == 0) {
+            auto status_msg = std_msgs::msg::String();
+            std::stringstream ss;
+            ss << "=== System Health ===\n";
+            ss << "Temp: " << status.temperature << " C\n";
+            ss << "Voltages: [3.3V: " << status.voltage_3v3 << "V] [Input: " << status.voltage_3v0 << "V]\n"; // 3v0 is usually input rail
+            ss << "CPU Idle: " << (int)status.rx_idle_time * 0.5 << " %\n";
+            ss << "Error Word: 0x" << std::hex << status.error_word << std::dec;
+            // Error word가 0이 아니면 경고 표시
+            if (status.error_word != 0) ss << " (WARNING!)";
+            
+            status_msg.data = ss.str();
+            status_pub_->publish(status_msg);
+        }
+		
     }
 
     // Helper: Position Type to String
@@ -468,6 +516,8 @@ private:
     rclcpp::Publisher<std_msgs::msg::String>::SharedPtr nmea_pub_;
     rclcpp::Subscription<std_msgs::msg::ByteMultiArray>::SharedPtr rtcm_sub_;
     rclcpp::TimerBase::SharedPtr timer_;
+	rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
+    rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr reset_service_;
     std::string frame_id_;
     std::string imu_frame_id_;
     bool use_enu_ = true;

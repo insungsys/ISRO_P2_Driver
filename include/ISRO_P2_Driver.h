@@ -100,6 +100,28 @@ typedef struct __attribute__((packed)) {
     uint32_t imu_status_mask;         // Field 8: IMU Status Mask
 } IMU_MESSAGE_T;
 
+// STATUS 메시지 구조체 (Message ID: 2393) - Table 54
+typedef struct __attribute__((packed)) {
+    uint32_t error_word;          // Field 1
+    uint32_t status_word;         // Field 2
+    uint32_t aux1_word;           // Field 3
+    uint32_t aux2_word;           // Field 4
+    uint32_t aux3_word;           // Field 5
+    uint32_t aux4_word;           // Field 6
+    uint32_t aux5_word;           // Field 7
+    uint8_t  rx_idle_time;        // Field 8 (0.5% units)
+    uint8_t  me1_idle_time;       // Field 9
+    uint8_t  me2_idle_time;       // Field 10
+    uint8_t  reserved_align;      // Field 11
+    float    temperature;         // Field 12 (C)
+    float    voltage_rtc;         // Field 13 (V)
+    float    voltage_3v3;         // Field 14 (V)
+    float    voltage_3v0;         // Field 15 (V)
+    float    voltage_2v85;        // Field 16 (V)
+    float    voltage_1v35;        // Field 17 (V)
+    float    voltage_1v20;        // Field 18 (V)
+} STATUS_MESSAGE_T;
+
 // ---------------------------------------------------------
 // 설정 및 API 정의
 // ---------------------------------------------------------
@@ -135,6 +157,10 @@ int P2_GetNMEA(ISRO_P2_T* device, char* buffer, int buffer_len);
 
 // [RTK용] RTCM 데이터 전송하기
 int P2_SendRTCM(ISRO_P2_T* device, const uint8_t* rtcm_data, uint32_t len);
+
+// 상태 조회 및 리셋 함수
+int P2_GetStatus(ISRO_P2_T* device, STATUS_MESSAGE_T* status);
+int P2_SendReset(ISRO_P2_T* device);
 
 void P2_SetIMUCallback(ISRO_P2_T* device, IMU_Callback callback, void* user_data);
 
