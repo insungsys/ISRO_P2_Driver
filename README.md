@@ -1,6 +1,6 @@
 # ISRO_P2_Driver
 
-PIMTP (PIM Transfer Protocol) 기반 GNSS/INS 장비용 ROS2 드라이버입니다.
+PIMTP (PIM Transfer Protocol) 기반 GNSS/INS 장비 ISRO-P2용 ROS2 드라이버입니다.
 
 GNSS/INS 수신기로부터 PVA (Position, Velocity, Attitude) 및 IMU 데이터를 파싱하여 표준 ROS2 메시지로 발행합니다.
 
@@ -16,7 +16,6 @@ GNSS/INS 수신기로부터 PVA (Position, Velocity, Attitude) 및 IMU 데이터
 ## 지원 장비
 
 - PIM222A (PIMTP 프로토콜)
-- NovAtel OEM7 Automotive 메시지 포맷 사용 장비
 
 ## 요구사항
 
@@ -28,7 +27,7 @@ GNSS/INS 수신기로부터 PVA (Position, Velocity, Attitude) 및 IMU 데이터
 ```bash
 # 워크스페이스에 클론
 cd ~/ros2_ws/src
-git clone https://github.com/YOUR_USERNAME/ISRO_P2_Driver.git
+git clone https://github.com/TheLastTroll/ISRO_P2_Driver.git
 
 # 빌드
 cd ~/ros2_ws
@@ -190,7 +189,7 @@ ros2 run ISRO_P2_Driver ntrip.py --ros-args \
 |------|------|------|
 | latitude | double | 위도 (degrees) |
 | longitude | double | 경도 (degrees) |
-| height | double | 타원체고 (m) |
+| height | double | 타원체고도 (m) |
 | velocity_x/y/z | double | 속도 (m/s) |
 | attitude_roll/pitch/azimuth | double | 자세 (degrees) |
 | lat/lon/height_std_dev | float | 위치 표준편차 |
@@ -209,7 +208,7 @@ ros2 run ISRO_P2_Driver ntrip.py --ros-args \
 | 16 | SINGLE | 단독 측위 |
 | 17 | PSRDIFF | DGPS |
 | 34 | NARROW_FLOAT | RTK Float |
-| 50 | NARROW_INT | RTK Fixed (최상) |
+| 50 | NARROW_INT | RTK Fixed |
 | 56 | INS_RTKFIXED | INS + RTK Fixed |
 
 ## INS Status (INS 상태)
