@@ -531,6 +531,7 @@ ls -la /dev/ttyUSB*
 2. NMEA 발행 확인: `ros2 topic echo /nmea`
 3. 장비의 RTK 입력 설정 확인
 4. 인터넷 연결 상태 확인
+5. 권한부여 chmod +x ~/ros2_ws/src/ISRO_P2_Driver/scripts/ntrip.py
 
 ### Position Type이 NARROW_FLOAT에서 멈춤
 
