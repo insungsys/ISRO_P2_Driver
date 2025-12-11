@@ -33,8 +33,8 @@ BaudRate:COM1,921600                  # COM1: 고속 데이터 (PIMTP)
 BaudRate:COM2,115200                  # COM2: NMEA 출력 (모니터링/RTK용)
 
 # === PIMTP Automotive 로그 설정 (COM1) ===
-LogAutomotive:COM1,PVA,TIME,1.0,0     # PVA 메시지: 1Hz (또는 원하는 주기)
-LogAutomotive:COM1,IMU,CHANGE,0,0     # IMU 메시지: 데이터 변경 시 (100Hz)
+LogAutomotive:COM1,PVA,TIME,0.02,0     # PVA 메시지: 50Hz (또는 원하는 주기 1.0, 0.2, 0.1, 0.05, 0.02)
+LogAutomotive:COM1,IMU,CHANGE,0,0     # IMU 메시지 (100Hz)
 LogAutomotive:COM1,STATUS,CHANGE,0,0  # STATUS 메시지: 상태 변경 시
 
 # === NMEA 로그 설정 ===
@@ -42,7 +42,7 @@ LogNMEA:COM1,GGA,TIME,1.0,0           # COM1: GGA 1Hz (NTRIP용)
 LogNMEA:COM2,GGA,TIME,1.0,0           # COM2: GGA 1Hz (모니터링/RTK용)
 LogNMEA:COM2,GSV,TIME,1.0,0           # COM2: 위성 정보
 LogNMEA:COM2,PASHR,TIME,1.0,0         # COM2: 자세 정보
-LogNMEA:COM2,HDT,CHANGE,0,0           # COM2: DUALANTENNA Heading
+LogNMEA:COM2,HDT,CHANGE,0,0           # COM2: DUALANTENNA Heading (계산될경우)
 
 # === INS 레버암 설정 (차량별 측정 필요) ===
 INSRotation:RBV,0.0,0.0,0.0,3.0,3.0,3.0           # 권장 측정오차 3.0 입력
@@ -109,7 +109,7 @@ ISRO_P2_Driver/
 ### Serial 모드 (기본)
 
 ```bash
-ros2 launch ISRO_P2_Driver ISRO_P2_Driver_launch.py mode:=serial
+ros2 launch ISRO_P2_Driver ISRO_P2_Driver.launch.py mode:=serial
 ```
 
 ### TCP Client 모드
@@ -117,7 +117,7 @@ ros2 launch ISRO_P2_Driver ISRO_P2_Driver_launch.py mode:=serial
 장비에 TCP로 접속:
 
 ```bash
-ros2 launch ISRO_P2_Driver ISRO_P2_Driver_launch.py mode:=client
+ros2 launch ISRO_P2_Driver ISRO_P2_Driver.launch.py mode:=client
 ```
 
 ### TCP Server 모드
@@ -125,7 +125,7 @@ ros2 launch ISRO_P2_Driver ISRO_P2_Driver_launch.py mode:=client
 장비의 접속을 대기:
 
 ```bash
-ros2 launch ISRO_P2_Driver ISRO_P2_Driver_launch.py mode:=server
+ros2 launch ISRO_P2_Driver ISRO_P2_Driver.launch.py mode:=server
 ```
 
 ## 설정
