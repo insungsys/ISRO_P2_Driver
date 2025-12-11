@@ -3,7 +3,7 @@
 #include "sensor_msgs/msg/imu.hpp"
 #include "geometry_msgs/msg/twist_with_covariance_stamped.hpp"
 #include "std_msgs/msg/string.hpp"
-// [수정] 헤더 파일명은 소문자(byte_multi_array.hpp)여야 한다
+// [수정] 헤더 파일명은 소문자(byte_multi_array.hpp)
 #include "std_msgs/msg/byte_multi_array.hpp"
 #include "tf2/LinearMath/Quaternion.h"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
@@ -84,7 +84,7 @@ public:
 		// 하드웨어 상태 퍼블리셔 (STATUS ID 2393)
         status_pub_ = this->create_publisher<std_msgs::msg::String>("/pva/hardware_status", 10);
         
-        // [Debug] 상세 상태 모니터링 (v4 기능 완벽 이식)
+        // [Debug] 상세 상태 모니터링
         debug_pub_ = this->create_publisher<std_msgs::msg::String>("/pva/status_debug", 10);
         
         // [NMEA] NTRIP Client 연동용 (GGA 전송)
@@ -140,7 +140,7 @@ public:
 
     //  실제 IMU 데이터 처리 멤버 함수
     void imu_data_callback(const IMU_MESSAGE_T* imu) {
-        // 데이터 도착 즉시 현재 시간으로 발행 (또는 imu->gps_second 활용 가능)
+        // 데이터 도착 즉시 현재 시간으로 발행
         auto now = this->get_clock()->now();
         publishIMUData(*imu, now);
     }
@@ -216,15 +216,6 @@ private:
             nmea_msg.data = std::string(nmea_buf);
             nmea_pub_->publish(nmea_msg);
         }
-
-        // 3. IMU (Raw Sensor) 이제 콜백이 처리함.
-        //if (publish_raw_imu_) {
-        //    IMU_MESSAGE_T imu;
-        //    if (P2_GetIMU(device_, &imu) == 0) {
-        //        // IMU 시간 동기화는 PVA와 동일하거나, 수신 시간 사용
-        //        publishIMUData(imu, now); 
-        //    }
-        //}
 		
 		//  하드웨어 상태(STATUS) 처리
         STATUS_MESSAGE_T status;
@@ -250,7 +241,6 @@ private:
         switch(type) {
             case 0: return "NONE";
             case 16: return "SINGLE";
-            case 17: return "PSRDIFF";
             case 19: return "PROPAGATED";
             case 32: return "L1_FLOAT";
             case 34: return "NARROW_FLOAT";
@@ -283,7 +273,7 @@ private:
         }
     }
 
-    // [Full Logic Restoration] v4 코드의 모든 비트 체크 로직 복원
+
     std::string generateFullDebugString(const PVA_MESSAGE_T& pva) {
         std::stringstream ss;
         ss.precision(9);
@@ -293,9 +283,9 @@ private:
         ss << "[Position] Lat: " << std::fixed << pva.latitude 
            << ", Lon: " << pva.longitude 
            << ", Alt: " << std::setprecision(3) << pva.height << " m\n";
-        ss << "[Velocity] Vx: " << pva.velocity_x 
-           << ", Vy: " << pva.velocity_y 
-           << ", Vz: " << pva.velocity_z << " m/s\n";
+        ss << "[Velocity] VN: " << pva.velocity_x 
+           << ", VE: " << pva.velocity_y 
+           << ", VU: " << pva.velocity_z << " m/s\n";
         ss << "[Attitude] Roll: " << pva.attitude_roll 
            << ", Pitch: " << pva.attitude_pitch 
            << ", Azimuth: " << pva.attitude_azimuth << " deg\n";
@@ -378,28 +368,52 @@ private:
         vel_msg.header.stamp = timestamp;
         vel_msg.header.frame_id = frame_id_;
         
-        // ENU vs NED
+		// [A] Global NEU 속도 추출
+        // NovAtel 확인 결과: Vel_X=North, Vel_Y=East, Vel_Z=Up
+        double v_north = 0.0;
+        double v_east  = 0.0;
+        double v_up    = 0.0;
+
         if (use_enu_) {
-            vel_msg.twist.twist.linear.x = pva.velocity_y; // North -> Y -> East -> X ?? (ENU: X=East, Y=North, Z=Up)
-            // Caution: NED (North, East, Down) -> ENU (East, North, Up)
-            // pva.velocity_x = North, pva.velocity_y = East (Based on NovAtel spec)
-            // Correct mapping:
-            vel_msg.twist.twist.linear.x = pva.velocity_y; // East
-            vel_msg.twist.twist.linear.y = pva.velocity_x; // North
-            vel_msg.twist.twist.linear.z = pva.velocity_z; // Up (NovAtel gives Up velocity directly in SPAN)
+            v_north = pva.velocity_x;
+            v_east  = pva.velocity_y;
+            v_up    = pva.velocity_z;
         } else {
-            // NED Mapping
-            vel_msg.twist.twist.linear.x = pva.velocity_x;
-            vel_msg.twist.twist.linear.y = pva.velocity_y;
-            vel_msg.twist.twist.linear.z = -pva.velocity_z; // Down -> Up conversion
+            // NED 모드일 경우 (보통 NovAtel Raw와 동일하게 처리)
+            v_north = pva.velocity_x;
+            v_east  = pva.velocity_y;
+            v_up    = -pva.velocity_z; // Down -> Up 반전
         }
+
+        // [B] 현재 Yaw(Heading) 각도 계산 (Rad)
+        // NovAtel Azimuth (CW from North) -> ROS Yaw (CCW from East) 변환
+        double yaw_rad = 0.0;
+        if (use_enu_) {
+            yaw_rad = (90.0 - pva.attitude_azimuth) * M_PI / 180.0;
+        } else {
+            // NED 모드라도 회전 변환을 위해 표준 각도(CCW)로 변환하는 것이 안전함
+            yaw_rad = (90.0 - pva.attitude_azimuth) * M_PI / 180.0;
+        }
+
+        // [C] 회전 변환 (Global NEU -> Robot Body FLU)
+        // 공식:
+        // v_forward (X) =  cos(yaw)*v_east + sin(yaw)*v_north
+        // v_left    (Y) = -sin(yaw)*v_east + cos(yaw)*v_north
+        double cos_y = cos(yaw_rad);
+        double sin_y = sin(yaw_rad);
+
+        vel_msg.twist.twist.linear.x =  cos_y * v_east + sin_y * v_north; // Forward (전진 속도)
+        vel_msg.twist.twist.linear.y = -sin_y * v_east + cos_y * v_north; // Left (횡슬립 속도)
+        vel_msg.twist.twist.linear.z =  v_up;                             // Up (수직 속도)
         
+        // 공분산 설정
         vel_msg.twist.covariance[0] = pva.vel_x_std_dev * pva.vel_x_std_dev;
         vel_msg.twist.covariance[7] = pva.vel_y_std_dev * pva.vel_y_std_dev;
         vel_msg.twist.covariance[14] = pva.vel_z_std_dev * pva.vel_z_std_dev;
-        vel_msg.twist.covariance[21] = 0.01; // Rotation rate cov (unknown)
+        vel_msg.twist.covariance[21] = 0.01;
         vel_msg.twist.covariance[28] = 0.01;
         vel_msg.twist.covariance[35] = 0.01;
+        
         vel_pub_->publish(vel_msg);
 
         // Attitude Mapping
@@ -410,44 +424,30 @@ private:
         tf2::Quaternion q;
         double roll = pva.attitude_roll * M_PI / 180.0;
         double pitch = pva.attitude_pitch * M_PI / 180.0;
-        double yaw = pva.attitude_azimuth * M_PI / 180.0;
-        
+		
         if (use_enu_) {
-            // NovAtel Azimuth: North = 0, Clockwise
-            // ROS Yaw: East = 0, Counter-Clockwise
-            // Conversion: Yaw = 90 - Azimuth
-            yaw = (90.0 - pva.attitude_azimuth) * M_PI / 180.0;
-            // Normalize
+            // Yaw 변환 (Heading -> ROS Standard)
+            double yaw = (90.0 - pva.attitude_azimuth) * M_PI / 180.0;
+            // Normalize -PI ~ PI
             while (yaw > M_PI) yaw -= 2*M_PI;
             while (yaw < -M_PI) yaw += 2*M_PI;
             
-            q.setRPY(roll, -pitch, yaw); // Check pitch sign carefully for ENU
+            q.setRPY(roll, -pitch, yaw); 
         } else {
+            double yaw = pva.attitude_azimuth * M_PI / 180.0;
             q.setRPY(roll, pitch, yaw);
         }
         
         imu_msg.orientation = tf2::toMsg(q);
-        double roll_var = pva.roll_std_dev * pva.roll_std_dev * (M_PI/180.0) * (M_PI/180.0);
-        double pitch_var = pva.pitch_std_dev * pva.pitch_std_dev * (M_PI/180.0) * (M_PI/180.0);
-        double yaw_var = pva.azimuth_std_dev * pva.azimuth_std_dev * (M_PI/180.0) * (M_PI/180.0);
+		
+        // Covariance
+        imu_msg.orientation_covariance[0] = pow(pva.roll_std_dev * M_PI/180.0, 2);
+        imu_msg.orientation_covariance[4] = pow(pva.pitch_std_dev * M_PI/180.0, 2);
+        imu_msg.orientation_covariance[8] = pow(pva.azimuth_std_dev * M_PI/180.0, 2);
         
-        imu_msg.orientation_covariance[0] = roll_var;
-        imu_msg.orientation_covariance[4] = pitch_var;
-        imu_msg.orientation_covariance[8] = yaw_var;
-        
-        // PVA message doesn't have rates/accels
-        imu_msg.angular_velocity.x = 0.0;
-        imu_msg.angular_velocity.y = 0.0;
-        imu_msg.angular_velocity.z = 0.0;
-        imu_msg.linear_acceleration.x = 0.0;
-        imu_msg.linear_acceleration.y = 0.0;
-        imu_msg.linear_acceleration.z = 0.0;
-        
-        // Mark rates as unknown/invalid covariance
-        for (int i = 0; i < 9; i++) {
-            imu_msg.angular_velocity_covariance[i] = (i % 4 == 0) ? 1.0 : 0.0;
-            imu_msg.linear_acceleration_covariance[i] = (i % 4 == 0) ? 1.0 : 0.0;
-        }
+        // Angular Velocity / Linear Acceleration (Unknown in PVA)
+        imu_msg.angular_velocity_covariance[0] = -1;
+        imu_msg.linear_acceleration_covariance[0] = -1;
         
         imu_pub_->publish(imu_msg);
         

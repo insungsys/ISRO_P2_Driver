@@ -384,7 +384,7 @@ static void ParseByte(struct ISRO_P2_T* device, PARSER_CONTEXT_T* ctx, uint8_t b
                     uint32_t calc_crc = CalculateNovAtelCRC32(verify_buf, 12 + ctx->payload_length);
                     free(verify_buf);
 
-                    // [수정됨] Type 4 (NMEA)는 CRC가 틀려도 강제로 통과시킴 (일단 데이터를 보기 위함)
+                    // 디버그용 Type 4 (NMEA)는 CRC 관련
                     if (received_crc == calc_crc || ctx->payload_type == 4) {
                         
                         // 만약 CRC가 틀렸는데 Type 4라서 들어온 경우 경고 로그 출력
@@ -531,18 +531,10 @@ static int ConfigureSerial(int fd, int baudrate_param) {
     
     speed_t speed = B921600; // default
     
-    // [복구됨] Full Standard Baudrate List
+    // Full Standard Baudrate List
     switch(baudrate_param) {
-        case 4800:   speed = B4800;   break;
-        case 9600:   speed = B9600;   break;
-        case 19200:  speed = B19200;  break;
-        case 38400:  speed = B38400;  break;
-        case 57600:  speed = B57600;  break;
         case 115200: speed = B115200; break;
-        case 230400: speed = B230400; break;
         case 460800: speed = B460800; break;
-        case 500000: speed = B500000; break;
-        case 576000: speed = B576000; break;
         case 921600: speed = B921600; break;
         default:     speed = B921600; break;
     }
@@ -552,8 +544,7 @@ static int ConfigureSerial(int fd, int baudrate_param) {
 	
 	// =====================================================
     // Raw Mode 설정
-    // 이 함수가 없으면 바이너리 데이터 중 일부(0x0D, 0x11, 0x13 등)가
-    // 특수 문자로 인식되어 사라지거나 변조됩니다.
+    // 바이너리 데이터 중 일부(0x0D, 0x11, 0x13 등) 변조 방지.
     // =====================================================
     cfmakeraw(&tty);	
 	    
@@ -563,7 +554,7 @@ static int ConfigureSerial(int fd, int baudrate_param) {
     tty.c_cflag &= ~CRTSCTS;         // 하드웨어 흐름 제어 끄기 (중요!)
     tty.c_cflag &= ~PARENB;          // Parity 없음
 
-        // VMIN > 0 으로 설정하여 CPU 인터럽트 빈도를 줄임
+    // VMIN > 0 으로 설정하여 CPU 인터럽트 빈도를 줄임
     // 데이터가 최소 32바이트 쌓이거나, 0.1초(VTIME 1)가 지날 때까지 대기
     tty.c_cc[VMIN] = 32; 
     tty.c_cc[VTIME] = 1; 
@@ -693,7 +684,7 @@ void P2_SetIMUCallback(ISRO_P2_T* device, IMU_Callback callback, void* user_data
     pthread_mutex_unlock(&device->data_mutex);
 }
 
-//  Status 조회 API 구현
+//  Status 조회 API
 int P2_GetStatus(ISRO_P2_T* device, STATUS_MESSAGE_T* status) {
     if (!device || !status) return -1;
     pthread_mutex_lock(&device->data_mutex);
