@@ -383,11 +383,11 @@ ros2 run ISRO_P2_Driver ntrip.py --ros-args \
 | 1 | ALIGNING | 초기 정렬 중 |
 | 2 | HIGH_VARIANCE | 높은 분산 (정확도 낮음) |
 | 3 | SOLUTION_GOOD | 정상 INS 솔루션 |
-| 6 | SOLUTION_FREE | 자유 솔루션 |
+| 6 | SOLUTION_FREE | INS 독립 솔루션 (정확도 낮아지는 중) |
 | 7 | ALIGNMENT_COMPLETE | 정렬 완료 |
 | 8 | DETERMINING_ORIENTATION | 방위 결정 중 |
-| 9 | WAITING_INITIAL_POS | 초기 위치 대기 |
-| 10 | WAITING_AZIMUTH | 방위 대기 |
+| 9 | WAITING_INITIAL_POS | 초기 위치 대기 (주 안테나의 위치 정확도가 낮은 경우 발생) |
+| 10 | WAITING_AZIMUTH | 동체 전진방향 대기 |
 | 11 | INITIALIZING_BIASES | 바이어스 초기화 중 |
 | 12 | MOTION_DETECT | 움직임 감지 |
 
