@@ -614,6 +614,8 @@ MIT License
 
 이정환 (jhlee@insungsys.kr)  
 인성 기술연구소
+www.insungsys.kr
+
 
 ## 참고
 
