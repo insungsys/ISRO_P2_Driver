@@ -23,6 +23,7 @@ import serial
 import time
 import sys
 import os
+import locale
 
 # ==============================================================================
 # 설정
@@ -221,6 +222,7 @@ def create_data_block(config_text):
     b_sn = CONFIG_SN.encode('ascii')[:15].ljust(16, b'\x00')
     b_res1 = b'\x00' * 16
     b_res2 = b'\x00' * 16
+    locale.setlocale(locale.LC_TIME, 'C')  # 영어 로케일 강제
     b_date = time.strftime("%Y/%b/%d").encode('ascii')[:11].ljust(12, b'\x00')
     b_time = time.strftime("%H:%M:%S").encode('ascii')[:11].ljust(12, b'\x00')
     b_padding = b'\x00' * 8
@@ -421,7 +423,7 @@ def phase1_autobaud(ser, timeout=30.0):
 # ==============================================================================
 # Phase 2: Baud Switch
 # ==============================================================================
-def phase2_baud_switch(ser):
+def phase2_baud_switch(ser, target_port):
     """
     Winload 로그:
       "Changing Baud Rate to: 460800"
@@ -435,7 +437,7 @@ def phase2_baud_switch(ser):
     time.sleep(0.1)
     
     try:
-        new_ser = serial.Serial(TARGET_PORT, DATA_BAUD, timeout=0.1)
+        new_ser = serial.Serial(target_port, DATA_BAUD, timeout=0.1)
         print(f"    baud rate changed")
         return new_ser
     except Exception as e:
@@ -840,7 +842,7 @@ def perform_update(target_port=TARGET_PORT, config_text=None):
         return False
     
     # Phase 2: Baud Switch
-    ser = phase2_baud_switch(ser)
+    ser = phase2_baud_switch(ser, target_port)
     if ser is None:
         return False
     
