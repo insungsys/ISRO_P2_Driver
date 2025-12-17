@@ -69,7 +69,15 @@ install(TARGETS ISRO_P2_Driver_node
 # Python 스크립트 설치
 install(PROGRAMS
   scripts/ntrip.py
+  scripts/ISRO_P2_Config.py
+  scripts/ISRO_P2_GUI.py
   DESTINATION lib/${PROJECT_NAME}
+)
+
+# 바이너리 데이터(ssl_data.bin) 설치 (share 폴더 권장)
+install(FILES
+  scripts/ssl_data.bin
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 # 헤더 파일 설치
