@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import sys
 import serial.tools.list_ports
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
