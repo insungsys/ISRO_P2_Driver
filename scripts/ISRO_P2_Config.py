@@ -685,7 +685,7 @@ def send_pimtp_reset(target_port):
         
         # [D] CRC Calculation (Header + AutoHeader + Body)
         payload = pimtp_header + auto_header + reset_body
-        crc_val = calc_novatel_crc32(payload)
+        crc_val = calculate_crc32(payload)
         crc_bytes = struct.pack('<I', crc_val)
         
         final_packet = payload + crc_bytes
