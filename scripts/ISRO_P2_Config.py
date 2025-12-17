@@ -778,7 +778,7 @@ def phase4_5_6_protocol(ser, data_block):
 # ==============================================================================
 # 메인
 # ==============================================================================
-def perform_update():
+def perform_update(target_port=TARGET_PORT, config_text=None):
     print("=" * 60)
     print("PIM222A Config Updater (SerialLoad Protocol)")
     print("=" * 60)
@@ -812,10 +812,17 @@ def perform_update():
     data_block = create_data_block(config_text)
     print(f"    Data Block: {len(data_block)} bytes")
     
+    # PIMTP Reset (자동 재부팅)
+    send_pimtp_reset(target_port)
+    
+    print("    Waiting for device reboot (SerialLoad)...")
+    print("    (만약 자동 리셋이 안 되면 수동으로 껐다 켜주세요)")
+    time.sleep(0.5)
+    
     # 시리얼 연결
-    print(f"\n[Init] Opening {TARGET_PORT} at {INITIAL_BAUD} baud...")
+    print(f"\n[Init] Opening {target_port} at {INITIAL_BAUD} baud...")
     try:
-        ser = serial.Serial(TARGET_PORT, INITIAL_BAUD, timeout=0.1)
+        ser = serial.Serial(target_port, INITIAL_BAUD, timeout=0.1)
     except Exception as e:
         print(f"    [!] Error: {e}")
         return False
