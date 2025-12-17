@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-PIM222A Config Updater - SerialLoad Protocol
+ISRO-P2 Config Updater - SerialLoad Protocol
 =============================================
 Winload 로그 순서 기반 구현
 
@@ -48,7 +48,7 @@ USER_CONFIG_TEXT = """IMU:INTERNAL
 NMEATALKER:AUTO
 BaudRate:COM1,921600
 BaudRate:COM2,115200
-LogAutomotive:COM1,PVA,TIME,0.02,0
+LogAutomotive:COM1,PVA,TIME,1,0
 LogAutomotive:COM1,IMU,CHANGE,0,0
 LogAutomotive:COM1,STATUS,CHANGE,0,0
 LogNMEA:COM1,GGA,TIME,1.0,0
@@ -60,6 +60,65 @@ LogNMEA:COM2,HDT,CHANGE,0,0
 INSRotation:RBV,0.0,0.0,0.0,3.0,3.0,3.0
 INSTranslation:Ant1,0.00,-1.20,1.00,0.05,0.05,0.05
 INSTranslation:Ant2,0.00,1.80,1.00,0.05,0.05,0.05"""
+
+# CANDMI Config
+USER_CONFIG_TEXT2 = """IMU:internal
+BaudRate:COM1,921600
+LogNMEA:COM1,GGA,TIME,1.0,0
+LogAutomotive:COM1,PVA,TIME,1.0,0
+LogAutomotive:COM1,IMU,CHANGE,0,0
+LogAutomotive:COM1,STATUS,CHANGE,0,0
+BaudRate:COM2,115200
+LogNMEA:COM2,GGA,TIME,1.0,0
+INSRotation:RBV,0,0,90,1.0,1.0,1.0
+INSTranslation:Ant1,-0.4,0.0,0.9,0.05,0.05,0.05
+INSTranslation:Ant2,-1.4,0.0,0.9,0.05,0.05,0.05
+INSTranslation:DMI,-0.25,0.00,-0.33,0.03,0.03,0.03
+SetVehicleParameters:2.670,1.54,1.54,FRONT_WHEEL_ACKERMANN,0
+CAN:CAN1,500K
+DMI:CAN1,DMI_LUA
+LUA_CAN_SCRIPT:
+MESSAGE_WHEELSPEED = 0x200
+messageIDTable = {}
+messageIDTable[0] = MESSAGE_WHEELSPEED
+GEAR_PARK = 0x0
+GEAR_REVERSE = 0x2
+GEAR_NEUTRAL = 0x0
+GEAR_DRIVE = 0x1
+
+function applyScaleFactor(value)
+   return value >> 5
+end
+
+function processCANData(inputTable)
+   local returnTable = {}
+   if inputTable['MessageID'] == MESSAGE_WHEELSPEED then
+      local bin_data = string.unpack('I8', inputTable['Data'])
+      local gear = ( (bin_data & 0x000000000000C000) >> 14 )
+      local direction = 0
+      if gear == GEAR_DRIVE then
+         direction = 1
+      elseif gear == GEAR_REVERSE then
+         direction = -1
+      else
+         direction = 1
+      end
+
+      fl_data = ( (bin_data & 0x0000000000003FFF) >> 0 ) * direction * 0.03125
+      rr_data = ( (bin_data & 0x000000003FFF0000) >> 16 ) * direction * 0.03125
+      fr_data = ( (bin_data & 0x00003FFF00000000) >> 32 ) * direction * 0.03125 
+      rl_data = ( (bin_data & 0x3FFF000000000000) >> 48 ) * direction * 0.03125       
+
+      returnTable['front left'] = fl_data
+      returnTable['rear right'] = rr_data
+      returnTable['front right'] = fr_data
+      returnTable['rear left'] = rl_data      
+
+   end   
+
+   return returnTable
+
+end"""
 
 # ==============================================================================
 # 상수
@@ -99,6 +158,53 @@ def calculate_jamcrc(data):
                 crc >>= 1
     return crc  # final XOR 없음
 
+def calc_novatel_crc32(data):
+    """표준 NovAtel CRC32 (PIMTP 패킷용) - calculate_crc32와 동일"""
+    return calculate_crc32(data)
+
+def send_pimtp_reset(target_port):
+    """
+    [기능 추가] PIMTP 프로토콜을 사용하여 강제 리셋 명령(MsgID 2410) 전송
+    """
+    print(f"[Reset] Sending PIMTP RESET packet to {target_port}...")
+    
+    try:
+        # PIMTP Header + AutoHeader + Body
+        # Sync(AC 55 96 83) + Type(1) + Len(28)
+        pimtp_header = struct.pack('<4sHH I', b'\xAC\x55\x96\x83', 1, 0, 28)
+        # MsgID(2410) + Size(12)
+        auto_header = struct.pack('<HHHHII', 2410, 12, 0, 0, 0, 0)
+        # Body(0=Normal)
+        reset_body = struct.pack('<III', 0, 0, 0)
+        
+        payload = pimtp_header + auto_header + reset_body
+        
+        # [수정] 정의된 함수 호출
+        crc_val = calc_novatel_crc32(payload)
+        
+        final_packet = payload + struct.pack('<I', crc_val)
+        
+        # 전송 시도 (Baudrate 순회)
+        # 리셋이 성공하면 장비가 즉시 재부팅되므로, 빠르게 보내고 빠져나옵니다.
+        baud_candidates = [460800, 921600, 115200]
+        sent = False
+        for baud in baud_candidates:
+            try:
+                with serial.Serial(target_port, baud, timeout=0.1) as ser:
+                    ser.write(final_packet)
+                    time.sleep(0.05) # 전송 대기
+                sent = True
+            except: 
+                pass
+            
+        if sent:
+            print("    -> PIMTP Reset packet sent.")
+        else:
+            print("    [!] Could not open port for reset (might be busy or wrong port).")
+            
+    except Exception as e:
+        print(f"    [!] Reset failed: {e}")    
+    
 # ==============================================================================
 # Data Block 생성
 # ==============================================================================
@@ -619,37 +725,49 @@ def phase4_5_6_protocol(ser, data_block):
     debug(f"RX Post Config: {len(resp)}B - {resp[:30].hex(' ') if resp else 'empty'}")
     
     # ★★★ 핵심: Erase/Reset 메시지 대기 ★★★
+    # Post Config 응답에 이미 Erase 메시지가 포함될 수 있음
     debug("Waiting for Erase/Reset message...")
     start = time.time()
-    buffer = b''
+    buffer = resp  # Post Config 응답도 buffer에 포함!
     erase_reset_received = False
+    erase_time_shown = False
     
     while time.time() - start < 15.0:
         if ser.in_waiting:
             chunk = ser.read(ser.in_waiting)
             buffer += chunk
             debug(f"Received: {len(chunk)}B, total: {len(buffer)}B")
-            
-            if b'Erase Time' in buffer:
-                try:
-                    erase_idx = buffer.find(b'Erase Time')
-                    msg = buffer[erase_idx:erase_idx+50].decode('ascii', errors='replace')
-                    msg = ''.join(c for c in msg if c.isprintable() or c == ' ')
-                    print(f"    Total {msg.strip()}")
-                except:
-                    print(f"    Total Erase Time: OK")
-            
-            if b'Resetting' in buffer:
-                erase_reset_received = True
-                print(f"    Resetting...")
-                break
+        
+        # Erase Time 메시지 체크 (한 번만 출력)
+        if not erase_time_shown and b'Erase Time' in buffer:
+            try:
+                erase_idx = buffer.find(b'Erase Time')
+                msg = buffer[erase_idx:erase_idx+50].decode('ascii', errors='replace')
+                msg = ''.join(c for c in msg if c.isprintable() or c == ' ')
+                print(f"    Total {msg.strip()}")
+            except:
+                print(f"    Total Erase Time: OK")
+            erase_time_shown = True
+        
+        # Resetting 메시지 체크
+        if b'Resetting' in buffer or b'Reset' in buffer:
+            erase_reset_received = True
+            print(f"    Resetting...")
+            break
+        
+        # Erase Time을 받았으면 잠시 더 기다린 후 종료 (일부 장비는 Reset 메시지 없음)
+        if erase_time_shown and time.time() - start > 2.0:
+            erase_reset_received = True
+            break
         
         time.sleep(0.05)
     
-    if erase_reset_received:
-        debug("TX Final ACK (Seq=14, Msg=0x01)")
-        ser.write(PKT_FINAL_ACK)
-        ser.flush()
+    # Final ACK 전송 (성공/실패 무관하게 전송)
+    debug("TX Final ACK (Seq=14, Msg=0x01)")
+    ser.write(PKT_FINAL_ACK)
+    ser.flush()
+    
+    if erase_reset_received or erase_time_shown:
         print(f"    Done.")
         return True, device_info
     else:
@@ -657,65 +775,10 @@ def phase4_5_6_protocol(ser, data_block):
         debug(f"Buffer contents: {buffer[:100].hex(' ') if buffer else 'empty'}")
         return False, device_info
 
-        
-def send_pimtp_reset(target_port):
-    """
-    PIMTP 프로토콜을 사용하여 강제 리셋 명령(MsgID 2410)을 전송합니다.
-    (참고: ISRO_P2_Driver.c의 P2_SendReset 함수)
-    """
-    print(f"[Reset] Sending PIMTP RESET packet to {target_port}...")
-    
-    try:
-        # 1. 패킷 생성 (Total 44 bytes)
-        # ---------------------------------------------------------
-        # [A] PIMTP Header (12 bytes)
-        # Sync(4) + Type(2) + Reserved(2) + Length(4)
-        # Type 1 = Automotive, Length = 16(AutoHeader) + 12(Body) = 28
-        pimtp_header = struct.pack('<4sHH I', b'\xAC\x55\x96\x83', 1, 0, 28)
-        
-        # [B] Automotive Header (16 bytes)
-        # MsgID(2) + Size(2) + TimeStatus(2) + Week(2) + MS(4) + Res(4)
-        # MsgID 2410 = RESET, Size 12 = Body Size
-        auto_header = struct.pack('<HHHHII', 2410, 12, 0, 0, 0, 0)
-        
-        # [C] Reset Body (12 bytes) - Table 66, 67
-        # Type(4) + Param1(4) + Param2(4)
-        # Type 0 = Normal Reset
-        reset_body = struct.pack('<III', 0, 0, 0)
-        
-        # [D] CRC Calculation (Header + AutoHeader + Body)
-        payload = pimtp_header + auto_header + reset_body
-        crc_val = calculate_crc32(payload)
-        crc_bytes = struct.pack('<I', crc_val)
-        
-        final_packet = payload + crc_bytes
-        
-        # 2. 전송
-        # ---------------------------------------------------------
-        # PIMTP는 바이너리 통신이므로 Baudrate가 맞아도 안전하게 보냄
-        # 일반적으로 장비가 동작 중인 Baudrate(예: 460800)로 보내야 함.
-        # 모르면 115200, 460800, 921600을 순차적으로 시도하는 것이 좋음.
-        
-        baud_candidates = [460800, 921600, 115200]
-        
-        for baud in baud_candidates:
-            print(f"    -> Attempting at {baud} bps...")
-            with serial.Serial(target_port, baud, timeout=0.5) as ser:
-                ser.write(final_packet)
-                time.sleep(0.1)
-                
-        print("    -> PIMTP Reset packet sent.")
-        
-    except Exception as e:
-        print(f"    [!] Failed to send PIMTP reset: {e}")
-        print("    (Please cycle power manually if update doesn't start)")        
-        
-        
-        
 # ==============================================================================
 # 메인
 # ==============================================================================
-def perform_update(target_port=TARGET_PORT, config_text=None):
+def perform_update():
     print("=" * 60)
     print("PIM222A Config Updater (SerialLoad Protocol)")
     print("=" * 60)
@@ -734,7 +797,7 @@ def perform_update(target_port=TARGET_PORT, config_text=None):
     # Config Data Block 생성
     print("\n[Init] Creating config data block...")
     
-    # 인자로 받은 config_text가 없으면 전역 변수 사용
+    # 외부 config 파일이 있으면 읽기
     if config_text is None:
         config_text = USER_CONFIG_TEXT
         if CONFIG_FILE and os.path.exists(CONFIG_FILE):
@@ -750,19 +813,12 @@ def perform_update(target_port=TARGET_PORT, config_text=None):
     print(f"    Data Block: {len(data_block)} bytes")
     
     # 시리얼 연결
-    print(f"\n[Init] Opening {target_port} at {INITIAL_BAUD} baud...")
+    print(f"\n[Init] Opening {TARGET_PORT} at {INITIAL_BAUD} baud...")
     try:
-        ser = serial.Serial(target_port, INITIAL_BAUD, timeout=0.1)
+        ser = serial.Serial(TARGET_PORT, INITIAL_BAUD, timeout=0.1)
     except Exception as e:
         print(f"    [!] Error: {e}")
         return False
-        
-    # 3. 리셋 시도 (Soft Reset 대신 PIMTP Reset 호출)
-    send_pimtp_reset(target_port)
-    
-    print("    Waiting for device reboot (SerialLoad)...")
-    time.sleep(0.1) # 재부팅 시간 대기    
-        
     
     # 장비 대기
     print("\n" + "=" * 60)
@@ -809,7 +865,7 @@ def perform_update(target_port=TARGET_PORT, config_text=None):
 if __name__ == "__main__":
     print("""
 ┌─────────────────────────────────────────────────────────────┐
-│  PIM222A SerialLoad Config Updater                          │
+│  ISRO-P2 SerialLoad Config Updater                          │
 │                                                             │
 │  필요 파일: ssl_data.bin (같은 폴더)                        │
 │                                                             │
