@@ -77,7 +77,7 @@ install(PROGRAMS
 # 바이너리 데이터(ssl_data.bin) 설치 (share 폴더 권장)
 install(FILES
   scripts/ssl_data.bin
-  DESTINATION share/${PROJECT_NAME}/config
+  DESTINATION lib/${PROJECT_NAME}/config
 )
 
 # 헤더 파일 설치
