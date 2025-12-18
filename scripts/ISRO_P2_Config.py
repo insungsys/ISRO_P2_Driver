@@ -722,9 +722,20 @@ def phase4_5_6_protocol(ser, data_block):
     ser.write(PKT_POST_CONFIG_ACK)
     ser.flush()
     
-    # 첫 번째 5A A5 응답
+    # ★ 안정성 개선: ACK 전송 후 잠시 대기하여 장비가 응답할 시간 확보
+    time.sleep(0.2)
+    
+    # 첫 번째 5A A5 응답 + 버퍼에 있는 추가 데이터 모두 읽기
     resp = wait_5aa5_response(ser, timeout=1.0)
-    debug(f"RX Post Config: {len(resp)}B - {resp[:30].hex(' ') if resp else 'empty'}")
+    
+    # ★ 안정성 개선: 추가 데이터가 버퍼에 있으면 즉시 읽기
+    time.sleep(0.1)
+    if ser.in_waiting:
+        extra = ser.read(ser.in_waiting)
+        resp += extra
+        debug(f"Extra data read: {len(extra)}B")
+    
+    debug(f"RX Post Config: {len(resp)}B - {resp[:50].hex(' ') if resp else 'empty'}")
     
     # ★★★ 핵심: Erase/Reset 메시지 대기 ★★★
     # Post Config 응답에 이미 Erase 메시지가 포함될 수 있음
@@ -735,6 +746,8 @@ def phase4_5_6_protocol(ser, data_block):
     erase_time_shown = False
     
     while time.time() - start < 15.0:
+        # ★ 안정성 개선: 더 적극적으로 데이터 읽기
+        time.sleep(0.05)
         if ser.in_waiting:
             chunk = ser.read(ser.in_waiting)
             buffer += chunk
@@ -761,8 +774,6 @@ def phase4_5_6_protocol(ser, data_block):
         if erase_time_shown and time.time() - start > 2.0:
             erase_reset_received = True
             break
-        
-        time.sleep(0.05)
     
     # Final ACK 전송 (성공/실패 무관하게 전송)
     debug("TX Final ACK (Seq=14, Msg=0x01)")
