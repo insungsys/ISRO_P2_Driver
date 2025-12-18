@@ -72,11 +72,11 @@ INSTranslation:Ant2,0.00,1.80,1.00,0.05,0.05,0.05
 ```bash
 # 워크스페이스에 클론
 cd ~/ros2_ws/src
-git clone https://github.com/TheLastTroll/ISRO_P2_Driver.git
+git clone https://github.com/insungsys/ISRO_P2_Driver.git
 
 # 빌드
 cd ~/ros2_ws
-colcon build --packages-select ISRO_P2_Driver
+colcon build --packages-select ISRO_P2_Driver --symlink-install
 
 # 환경 설정
 source install/setup.bash
@@ -95,11 +95,10 @@ ISRO_P2_Driver/
 │   ├── ISRO_P2_Driver.c         # C 드라이버 (PIMTP 파서)
 │   └── ISRO_P2_Driver_node.cpp  # ROS2 노드
 ├── scripts/
-│   └── ntrip.py                 # NTRIP 클라이언트 노드
-├── tools/                       # 장비 설정 도구
+│   ├── ntrip.py                 # NTRIP 클라이언트 노드
 │   ├── ISRO_P2_GUI.py           # GUI 설정 도구
 │   ├── ISRO_P2_Config.py        # CLI 설정 도구 / 핵심 라이브러리
-│   └── PIM222A_v*.bin           # 펌웨어 파일 (필요 시)
+│   └── ssl_data.bin             # SSL 데이터 파일
 ├── launch/
 │   └── ISRO_P2_Driver.launch.py
 └── config/
@@ -116,19 +115,29 @@ PIM222A 장비의 설정을 업로드하는 도구입니다. GUI와 CLI 두 가�
 
 ```bash
 # 실행 권한 부여
-chmod +x ~/ros2_ws/src/ISRO_P2_Driver/tools/ISRO_P2_GUI.py
-chmod +x ~/ros2_ws/src/ISRO_P2_Driver/tools/ISRO_P2_Config.py
-chmod +x ~/ros2_ws/src/ISRO_P2_Driver/tools/*.bin   # 펌웨어 파일 (있는 경우)
+chmod +x ~/ros2_ws/src/ISRO_P2_Driver/scripts/ISRO_P2_GUI.py
+chmod +x ~/ros2_ws/src/ISRO_P2_Driver/scripts/ISRO_P2_Config.py
+chmod +x ~/ros2_ws/src/ISRO_P2_Driver/scripts/ntrip.py
 
-# 의존성 설치
+# 의존성 설치 (방법 1: pip)
 pip install pyserial PyQt6
+
+# 의존성 설치 (방법 2: apt, pip 실패 시)
+sudo apt install python3-serial python3-pyqt6
+
+# 의존성 설치 (방법 3: pip --break-system-packages, Ubuntu 24.04)
+pip install pyserial PyQt6 --break-system-packages
 ```
 
 ### GUI 모드
 
 ```bash
-cd ~/ros2_ws/src/ISRO_P2_Driver/tools
+# 방법 1: 직접 실행
+cd ~/ros2_ws/src/ISRO_P2_Driver/scripts
 python3 ISRO_P2_GUI.py
+
+# 방법 2: ROS2 run (빌드 후)
+ros2 run ISRO_P2_Driver ISRO_P2_GUI.py
 ```
 
 **GUI 기능:**
@@ -147,8 +156,12 @@ python3 ISRO_P2_GUI.py
 ### CLI 모드
 
 ```bash
-cd ~/ros2_ws/src/ISRO_P2_Driver/tools
+# 방법 1: 직접 실행
+cd ~/ros2_ws/src/ISRO_P2_Driver/scripts
 python3 ISRO_P2_Config.py
+
+# 방법 2: ROS2 run (빌드 후)
+ros2 run ISRO_P2_Driver ISRO_P2_Config.py
 ```
 
 ### INS Rotation (RBV) 설정 가이드
