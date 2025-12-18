@@ -439,41 +439,94 @@ class PIM222A_GUI(QMainWindow):
         opts_layout.addWidget(self.cb_dual_ant)
         layout.addLayout(opts_layout)
         
+        # Rotation 테이블 정의 (NovAtel 정식 프로그램 기준, Row 6 수정됨)
+        self.ROTATION_TABLE = {
+            ('right', 'front'): ('up', 0, 0, 0),
+            ('left', 'front'): ('down', 0, 180, 0),
+            ('up', 'front'): ('left', 0, 90, 0),
+            ('down', 'front'): ('right', 0, -90, 0),
+            ('up', 'back'): ('right', 0, -90, 180),
+            ('down', 'back'): ('left', 0, 90, 180),
+            ('left', 'back'): ('up', 0, 0, 180),
+            ('right', 'back'): ('down', 0, 180, 180),
+            ('left', 'up'): ('front', 90, 0, 180),
+            ('right', 'up'): ('back', -90, 0, 0),
+            ('front', 'up'): ('right', 0, -90, -90),
+            ('back', 'up'): ('left', 0, 90, 90),
+            ('left', 'down'): ('back', -90, 0, 180),
+            ('right', 'down'): ('front', 90, 0, 0),
+            ('front', 'down'): ('left', 0, 90, -90),
+            ('back', 'down'): ('right', 0, -90, 90),
+            ('back', 'right'): ('up', 0, 0, 90),
+            ('front', 'right'): ('down', 0, 180, -90),
+            ('up', 'right'): ('front', 90, 90, 0),
+            ('down', 'right'): ('back', -90, -90, 0),
+            ('down', 'left'): ('front', 90, -90, 0),
+            ('up', 'left'): ('back', -90, 90, 0),
+            ('front', 'left'): ('up', 0, 0, -90),
+            ('back', 'left'): ('down', 0, 180, 90),
+        }
+        
         # Rotation 입력과 시각화를 가로로 배치
         rotation_layout = QHBoxLayout()
         
-        # 좌측: 입력 필드
-        self.rbv_group = QGroupBox("Rotation (RBV) - [deg]")
+        # 좌측: 축 방향 선택
+        self.rbv_group = QGroupBox("Rotation (RBV) - IMU Orientation")
         rbv_layout = QVBoxLayout()
         
-        # X (Roll)
+        directions = ["right", "left", "front", "back", "up", "down"]
+        
+        # X+ 방향 선택
         x_layout = QHBoxLayout()
-        x_layout.addWidget(QLabel("X (Roll):"))
-        self.rbv_x = QLineEdit("0.0")
-        self.rbv_x.textChanged.connect(self.update_rotation_view)
-        x_layout.addWidget(self.rbv_x)
+        x_layout.addWidget(QLabel("IMU's X+ pointing:"))
+        self.imu_x_combo = QComboBox()
+        self.imu_x_combo.addItems(directions)
+        self.imu_x_combo.setCurrentText("right")
+        self.imu_x_combo.currentTextChanged.connect(self.on_imu_orientation_changed)
+        x_layout.addWidget(self.imu_x_combo)
         rbv_layout.addLayout(x_layout)
         
-        # Y (Pitch)
+        # Y+ 방향 선택
         y_layout = QHBoxLayout()
-        y_layout.addWidget(QLabel("Y (Pitch):"))
-        self.rbv_y = QLineEdit("0.0")
-        self.rbv_y.textChanged.connect(self.update_rotation_view)
-        y_layout.addWidget(self.rbv_y)
+        y_layout.addWidget(QLabel("IMU's Y+ pointing:"))
+        self.imu_y_combo = QComboBox()
+        self.imu_y_combo.addItems(directions)
+        self.imu_y_combo.setCurrentText("front")
+        self.imu_y_combo.currentTextChanged.connect(self.on_imu_orientation_changed)
+        y_layout.addWidget(self.imu_y_combo)
         rbv_layout.addLayout(y_layout)
         
-        # Z (Yaw)
+        # Z+ 방향 (자동 계산)
         z_layout = QHBoxLayout()
-        z_layout.addWidget(QLabel("Z (Yaw):"))
-        self.rbv_z = QLineEdit("0.0")
-        self.rbv_z.textChanged.connect(self.update_rotation_view)
-        z_layout.addWidget(self.rbv_z)
+        z_layout.addWidget(QLabel("IMU's Z+ pointing:"))
+        self.imu_z_label = QLabel("up")
+        self.imu_z_label.setStyleSheet("font-weight: bold; color: #0066cc;")
+        z_layout.addWidget(self.imu_z_label)
         rbv_layout.addLayout(z_layout)
         
-        # 좌표계 설명
-        coord_label = QLabel("Default: Y=Front, X=Right, Z=Up")
-        coord_label.setStyleSheet("color: #666; font-size: 10px;")
-        rbv_layout.addWidget(coord_label)
+        # 구분선
+        line = QFrame()
+        line.setFrameShape(QFrame.Shape.HLine)
+        line.setStyleSheet("color: #ccc;")
+        rbv_layout.addWidget(line)
+        
+        # RBV 값 표시
+        rbv_value_layout = QHBoxLayout()
+        rbv_value_layout.addWidget(QLabel("Rotation (X, Y, Z):"))
+        self.rbv_value_label = QLabel("(0, 0, 0)")
+        self.rbv_value_label.setStyleSheet("font-weight: bold; font-family: monospace;")
+        rbv_value_layout.addWidget(self.rbv_value_label)
+        rbv_layout.addLayout(rbv_value_layout)
+        
+        # 상태 메시지
+        self.rbv_status_label = QLabel("")
+        self.rbv_status_label.setStyleSheet("color: #666; font-size: 10px;")
+        rbv_layout.addWidget(self.rbv_status_label)
+        
+        # 내부 RBV 값 저장 (config 생성용)
+        self.rbv_x_val = 0
+        self.rbv_y_val = 0
+        self.rbv_z_val = 0
         
         self.rbv_group.setLayout(rbv_layout)
         rotation_layout.addWidget(self.rbv_group)
@@ -508,15 +561,56 @@ class PIM222A_GUI(QMainWindow):
         group.setLayout(layout)
         self.scroll_layout.addWidget(group)
     
-    def update_rotation_view(self):
-        """회전 값이 변경될 때 시각화 업데이트"""
-        try:
-            x = float(self.rbv_x.text() or 0)
-            y = float(self.rbv_y.text() or 0)
-            z = float(self.rbv_z.text() or 0)
-            self.rotation_viewer.set_rotation(x, y, z)
-        except ValueError:
-            pass  # 잘못된 입력 무시
+    def on_imu_orientation_changed(self):
+        """X+, Y+ 방향이 변경될 때 Z+와 RBV 값 계산"""
+        x_dir = self.imu_x_combo.currentText()
+        y_dir = self.imu_y_combo.currentText()
+        
+        # 같은 방향 또는 반대 방향 선택 체크
+        opposite = {
+            'right': 'left', 'left': 'right',
+            'front': 'back', 'back': 'front',
+            'up': 'down', 'down': 'up'
+        }
+        
+        if x_dir == y_dir:
+            self.imu_z_label.setText("Invalid")
+            self.imu_z_label.setStyleSheet("font-weight: bold; color: red;")
+            self.rbv_value_label.setText("---")
+            self.rbv_status_label.setText("X+ and Y+ cannot point in the same direction")
+            return
+        
+        if x_dir == opposite.get(y_dir):
+            self.imu_z_label.setText("Invalid")
+            self.imu_z_label.setStyleSheet("font-weight: bold; color: red;")
+            self.rbv_value_label.setText("---")
+            self.rbv_status_label.setText("X+ and Y+ cannot point in opposite directions")
+            return
+        
+        # 테이블에서 조합 찾기
+        key = (x_dir, y_dir)
+        if key in self.ROTATION_TABLE:
+            z_dir, rx, ry, rz = self.ROTATION_TABLE[key]
+            
+            self.imu_z_label.setText(z_dir)
+            self.imu_z_label.setStyleSheet("font-weight: bold; color: #0066cc;")
+            self.rbv_value_label.setText(f"({rx}, {ry}, {rz})")
+            self.rbv_status_label.setText("✓ Valid orientation")
+            self.rbv_status_label.setStyleSheet("color: green; font-size: 10px;")
+            
+            # 내부 값 저장
+            self.rbv_x_val = rx
+            self.rbv_y_val = ry
+            self.rbv_z_val = rz
+            
+            # 시각화 업데이트
+            self.rotation_viewer.set_rotation(rx, ry, rz)
+        else:
+            self.imu_z_label.setText("Unknown")
+            self.imu_z_label.setStyleSheet("font-weight: bold; color: orange;")
+            self.rbv_value_label.setText("---")
+            self.rbv_status_label.setText("Combination not found in table")
+            self.rbv_status_label.setStyleSheet("color: orange; font-size: 10px;")
 
     def update_ins_ui_state(self):
         use_ins = self.cb_enable_ins.isChecked()
@@ -621,7 +715,7 @@ class PIM222A_GUI(QMainWindow):
         
         # INS 설정 추가
         if self.cb_enable_ins.isChecked():
-            config.append(f"INSRotation:RBV,{self.rbv_x.text()},{self.rbv_y.text()},{self.rbv_z.text()},3.0,3.0,3.0")
+            config.append(f"INSRotation:RBV,{self.rbv_x_val},{self.rbv_y_val},{self.rbv_z_val},3.0,3.0,3.0")
             config.append(f"INSTranslation:Ant1,{self.la1_x.text()},{self.la1_y.text()},{self.la1_z.text()},0.05,0.05,0.05")
             if self.cb_dual_ant.isChecked():
                 config.append(f"INSTranslation:Ant2,{self.la2_x.text()},{self.la2_y.text()},{self.la2_z.text()},0.05,0.05,0.05")
