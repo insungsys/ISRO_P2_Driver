@@ -370,24 +370,34 @@ class PIM222A_GUI(QMainWindow):
     def create_com_settings_group(self):
         group = QGroupBox("Serial Port Settings")
         layout = QHBoxLayout()
-        self.com1_ui = self.create_single_com_ui("COM1", "921600")
+        self.com1_ui = self.create_single_com_ui("COM1", "921600", show_protocol=True)
         layout.addWidget(self.com1_ui)
-        self.com2_ui = self.create_single_com_ui("COM2", "115200")
+        self.com2_ui = self.create_single_com_ui("COM2", "115200", show_protocol=False)
         layout.addWidget(self.com2_ui)
         group.setLayout(layout)
         self.scroll_layout.addWidget(group)
 
-    def create_single_com_ui(self, port_name, default_baud):
+    def create_single_com_ui(self, port_name, default_baud, show_protocol=False):
         group = QGroupBox(port_name)
         layout = QVBoxLayout()
         
         h_layout = QHBoxLayout()
         h_layout.addWidget(QLabel("Baudrate:"))
         baud_combo = QComboBox()
-        baud_combo.addItems(["115200", "230400", "460800", "921600"])
+        baud_combo.addItems(["115200", "460800", "921600"])
         baud_combo.setCurrentText(default_baud)
         h_layout.addWidget(baud_combo)
         layout.addLayout(h_layout)
+        
+        # [추가] COM1 전용 Interface Mode (TX Protocol) 설정
+        if show_protocol:
+            proto_layout = QHBoxLayout()
+            proto_layout.addWidget(QLabel("TX Protocol:"))
+            proto_combo = QComboBox()
+            proto_combo.addItems(["PIMTP (Binary/Default)", "NMEA (ASCII Only)"])
+            proto_layout.addWidget(proto_combo)
+            layout.addLayout(proto_layout)
+            setattr(self, f"{port_name.lower()}_protocol", proto_combo)
         
         # 안내 문구
         layout.addWidget(QLabel("Logs (e.g. 'PVA 0.02', 'GGA 1.0'):"))
@@ -398,7 +408,7 @@ class PIM222A_GUI(QMainWindow):
         log_edit = QTextEdit()
         
         if port_name == "COM1":
-            example_logs = "PVA 0.02\nIMU\nSTATUS"
+            example_logs = "PVA 0.02\nIMU\nSTATUS\nGGA 1.0"
         else:
             example_logs = "GGA 1.0\nHDT"
             
@@ -561,13 +571,20 @@ class PIM222A_GUI(QMainWindow):
     def generate_config(self):
         """Config 생성 (표준 Interval 보정 적용)"""
         config = []
+        
+        # [추가] COM1 Interface Mode 설정 (맨 위에 배치)
+        if hasattr(self, "com1_protocol"):
+            if "NMEA" in self.com1_protocol.currentText():
+                config.append("InterfaceMode:COM1,PIMTP,NMEA")
+            # PIMTP 선택 시에는 기본값이므로 구문을 추가하지 않음
+        
         config.append("IMU:INTERNAL")
         config.append("NMEATALKER:AUTO")
         
         config.append(f"BaudRate:COM1,{self.com1_baud.currentText()}")
         config.append(f"BaudRate:COM2,{self.com2_baud.currentText()}")
         
-        # Log 설정을 먼저 처리 (Winload 순서와 동일)
+        # Log 설정 처리
         def process_logs(text_edit, port_name):
             logs = text_edit.toPlainText().strip().split('\n')
             for log in logs:
@@ -602,7 +619,7 @@ class PIM222A_GUI(QMainWindow):
         process_logs(self.com1_logs, "COM1")
         process_logs(self.com2_logs, "COM2")
         
-        # INS 설정은 Log 설정 이후에 추가 (Winload 순서와 동일)
+        # INS 설정 추가
         if self.cb_enable_ins.isChecked():
             config.append(f"INSRotation:RBV,{self.rbv_x.text()},{self.rbv_y.text()},{self.rbv_z.text()},3.0,3.0,3.0")
             config.append(f"INSTranslation:Ant1,{self.la1_x.text()},{self.la1_y.text()},{self.la1_z.text()},0.05,0.05,0.05")
