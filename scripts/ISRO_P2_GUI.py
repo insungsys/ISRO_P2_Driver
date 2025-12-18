@@ -41,45 +41,31 @@ class RotationViewer(QWidget):
         self.update()
     
     def rotate_3d_z(self, vec, angle_deg):
-        """Z축 오른손 법칙 회전 (Yaw: Counter-Clockwise is Positive)"""
+        """Z축 회전 (NovAtel SPAN 규약)"""
         x, y, z = vec
-        angle = math.radians(angle_deg)
+        angle = math.radians(-angle_deg)  # NovAtel 규약에 맞게 부호 반전
         c, s = math.cos(angle), math.sin(angle)
-        # 표준 오른손 법칙: x' = x*cos - y*sin, y' = x*sin + y*cos
         return (x*c - y*s, x*s + y*c, z)
     
     def rotate_3d_x(self, vec, angle_deg):
-        """X축 시계 방향 회전 (오른쪽에서 볼 때)"""
+        """X축 회전 (NovAtel SPAN 규약)"""
         x, y, z = vec
-        angle = math.radians(angle_deg)
+        angle = math.radians(-angle_deg)  # NovAtel 규약에 맞게 부호 반전
         c, s = math.cos(angle), math.sin(angle)
-        # 시계방향: y' = y*c - z*s, z' = y*s + z*c
         return (x, y*c - z*s, y*s + z*c)
     
     def rotate_3d_y(self, vec, angle_deg):
-        """Y축 시계 방향 회전 (오른쪽에서 볼 때)"""
+        """Y축 회전 (NovAtel SPAN 규약)"""
         x, y, z = vec
-        angle = math.radians(angle_deg)
+        angle = math.radians(-angle_deg)  # NovAtel 규약에 맞게 부호 반전
         c, s = math.cos(angle), math.sin(angle)
-        # 시계방향: x' = x*c + z*s, z' = -x*s + z*c
         return (x*c + z*s, y, -x*s + z*c)
     
     def apply_rbv(self, vec):
-        """
-        NovAtel SPAN RBV 규약 반영:
-        1. Sequence: Z (Yaw) -> X (Pitch) -> Y (Roll)
-        2. Direction: Z(RHR), X(LHR: Nose-Up+), Y(RHR)
-        """
-        # Step 1: Z축 회전 (Yaw, 오른손 법칙)
-        v = self.rotate_3d_z(vec, self.rot_z)
-        
-        # Step 2: X축 회전 (Pitch, 왼손 법칙 반영)
-        # NovAtel은 Nose Up을 (+)로 정의하므로, 수학적 RHR 함수에 음수(-)를 입력해야 LHR로 동작합니다.
-        v = self.rotate_3d_x(v, -self.rot_x)
-        
-        # Step 3: Y축 회전 (Roll, 오른손 법칙)
-        v = self.rotate_3d_y(v, self.rot_y)
-        
+        """RBV 회전 적용 (Z → X → Y 순서, NovAtel SPAN 규약)"""
+        v = self.rotate_3d_z(vec, self.rot_z)  # 1. Z 회전 (Yaw)
+        v = self.rotate_3d_x(v, self.rot_x)    # 2. X 회전 (Roll)
+        v = self.rotate_3d_y(v, self.rot_y)    # 3. Y 회전 (Pitch)
         return v
     
     def get_rotated_axes(self):
@@ -452,7 +438,7 @@ class PIM222A_GUI(QMainWindow):
         
         # X (Roll)
         x_layout = QHBoxLayout()
-        x_layout.addWidget(QLabel("X :"))
+        x_layout.addWidget(QLabel("X (Roll):"))
         self.rbv_x = QLineEdit("0.0")
         self.rbv_x.textChanged.connect(self.update_rotation_view)
         x_layout.addWidget(self.rbv_x)
@@ -460,7 +446,7 @@ class PIM222A_GUI(QMainWindow):
         
         # Y (Pitch)
         y_layout = QHBoxLayout()
-        y_layout.addWidget(QLabel("Y :"))
+        y_layout.addWidget(QLabel("Y (Pitch):"))
         self.rbv_y = QLineEdit("0.0")
         self.rbv_y.textChanged.connect(self.update_rotation_view)
         y_layout.addWidget(self.rbv_y)
@@ -468,7 +454,7 @@ class PIM222A_GUI(QMainWindow):
         
         # Z (Yaw)
         z_layout = QHBoxLayout()
-        z_layout.addWidget(QLabel("Z :"))
+        z_layout.addWidget(QLabel("Z (Yaw):"))
         self.rbv_z = QLineEdit("0.0")
         self.rbv_z.textChanged.connect(self.update_rotation_view)
         z_layout.addWidget(self.rbv_z)

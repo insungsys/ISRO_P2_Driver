@@ -96,6 +96,10 @@ ISRO_P2_Driver/
 │   └── ISRO_P2_Driver_node.cpp  # ROS2 노드
 ├── scripts/
 │   └── ntrip.py                 # NTRIP 클라이언트 노드
+├── tools/                       # 장비 설정 도구
+│   ├── ISRO_P2_GUI.py           # GUI 설정 도구
+│   ├── ISRO_P2_Config.py        # CLI 설정 도구 / 핵심 라이브러리
+│   └── PIM222A_v*.bin           # 펌웨어 파일 (필요 시)
 ├── launch/
 │   └── ISRO_P2_Driver.launch.py
 └── config/
@@ -103,6 +107,71 @@ ISRO_P2_Driver/
     ├── client_mode.yaml
     └── server_mode.yaml
 ```
+
+## Configuration Tool (장비 설정 도구)
+
+PIM222A 장비의 설정을 업로드하는 도구입니다. GUI와 CLI 두 가지 방식을 지원합니다.
+
+### 설치 및 권한 설정
+
+```bash
+# 실행 권한 부여
+chmod +x ~/ros2_ws/src/ISRO_P2_Driver/tools/ISRO_P2_GUI.py
+chmod +x ~/ros2_ws/src/ISRO_P2_Driver/tools/ISRO_P2_Config.py
+chmod +x ~/ros2_ws/src/ISRO_P2_Driver/tools/*.bin   # 펌웨어 파일 (있는 경우)
+
+# 의존성 설치
+pip install pyserial PyQt6
+```
+
+### GUI 모드
+
+```bash
+cd ~/ros2_ws/src/ISRO_P2_Driver/tools
+python3 ISRO_P2_GUI.py
+```
+
+**GUI 기능:**
+- 시리얼 포트 및 Baudrate 설정 (COM1/COM2)
+- 로그 출력 설정 (PVA, IMU, STATUS, NMEA)
+- INS 설정 (Enable INS, Dual Antenna)
+- INS Rotation (RBV) 실시간 시각화
+- 설정 미리보기 및 업로드
+- 업데이트 로그 실시간 표시
+
+**INS Rotation 시각화:**
+- Top View: X-Y 평면 (Yaw 회전)
+- Side View: Y-Z 평면 (Pitch/Roll 회전)
+- NovAtel SPAN 규약과 동일한 회전 순서 (Z → X → Y)
+
+### CLI 모드
+
+```bash
+cd ~/ros2_ws/src/ISRO_P2_Driver/tools
+python3 ISRO_P2_Config.py
+```
+
+### INS Rotation (RBV) 설정 가이드
+
+회전값은 NovAtel SPAN의 SETINSROTATION RBV 명령과 동일합니다.
+
+**회전 순서:** Z → X → Y (적용 순서), 표기는 X Y Z
+
+**기본 좌표계 (0, 0, 0):**
+- X = Right (오른쪽)
+- Y = Front (전방)
+- Z = Up (위쪽)
+
+**예시:**
+
+| RBV (X, Y, Z) | X축 방향 | Y축 방향 | Z축 방향 | 설명 |
+|---------------|----------|----------|----------|------|
+| (0, 0, 0) | Right | Front | Up | 기본 (IMU Y축이 전방) |
+| (0, 0, 90) | Back | Right | Up | Z축 90° 회전 |
+| (0, 90, 90) | Back | Up | Left | |
+| (0, -90, 0) | Down | Front | Right | |
+| (-90, 0, 0) | Right | Up | Back | |
+| (90, 0, 180) | Left | Up | Front | |
 
 ## 사용법
 
