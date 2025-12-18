@@ -567,12 +567,7 @@ class PIM222A_GUI(QMainWindow):
         config.append(f"BaudRate:COM1,{self.com1_baud.currentText()}")
         config.append(f"BaudRate:COM2,{self.com2_baud.currentText()}")
         
-        if self.cb_enable_ins.isChecked():
-            config.append(f"INSRotation:RBV,{self.rbv_x.text()},{self.rbv_y.text()},{self.rbv_z.text()},3.0,3.0,3.0")
-            config.append(f"INSTranslation:Ant1,{self.la1_x.text()},{self.la1_y.text()},{self.la1_z.text()},0.05,0.05,0.05")
-            if self.cb_dual_ant.isChecked():
-                config.append(f"INSTranslation:Ant2,{self.la2_x.text()},{self.la2_y.text()},{self.la2_z.text()},0.05,0.05,0.05")
-        
+        # Log 설정을 먼저 처리 (Winload 순서와 동일)
         def process_logs(text_edit, port_name):
             logs = text_edit.toPlainText().strip().split('\n')
             for log in logs:
@@ -606,6 +601,13 @@ class PIM222A_GUI(QMainWindow):
 
         process_logs(self.com1_logs, "COM1")
         process_logs(self.com2_logs, "COM2")
+        
+        # INS 설정은 Log 설정 이후에 추가 (Winload 순서와 동일)
+        if self.cb_enable_ins.isChecked():
+            config.append(f"INSRotation:RBV,{self.rbv_x.text()},{self.rbv_y.text()},{self.rbv_z.text()},3.0,3.0,3.0")
+            config.append(f"INSTranslation:Ant1,{self.la1_x.text()},{self.la1_y.text()},{self.la1_z.text()},0.05,0.05,0.05")
+            if self.cb_dual_ant.isChecked():
+                config.append(f"INSTranslation:Ant2,{self.la2_x.text()},{self.la2_y.text()},{self.la2_z.text()},0.05,0.05,0.05")
         
         final_text = "\n".join(config)
         self.config_preview.setText(final_text)
