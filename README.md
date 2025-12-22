@@ -156,7 +156,7 @@ ros2 run ISRO_P2_Driver ISRO_P2_GUI.py
 ### CLI 모드
 
 ```bash
-# 방법 1: 직접 실행
+# 방법 1: 직접 실행 (config.txt 파일 생성 후 또는 내부 파라미터 직접 변경)
 cd ~/ros2_ws/src/ISRO_P2_Driver/scripts
 python3 ISRO_P2_Config.py
 
@@ -210,7 +210,7 @@ ros2 launch ISRO_P2_Driver ISRO_P2_Driver.launch.py mode:=client
 ros2 launch ISRO_P2_Driver ISRO_P2_Driver.launch.py mode:=server
 ```
 
-## 설정
+## ROS2 설정
 
 `config/` 디렉토리의 YAML 파일을 수정하여 설정합니다.
 
